@@ -5,6 +5,7 @@ Host OpenSEO on Cloudflare for internet-facing self-hosting across multiple devi
 Related guides:
 
 - [Operations](./SELF_HOSTING_CLOUDFLARE_OPERATIONS.md): connect the MCP server, telemetry.
+- [Deploying from GitHub Actions](./SELF_HOSTING_GITHUB_ACTIONS.md): deploy from CI instead of a laptop.
 - [Legacy deployments](./SELF_HOSTING_CLOUDFLARE_LEGACY.md): maintenance for installs created with the retired Deploy-button or manual Wrangler flows.
 
 ## Prerequisites
