@@ -25,12 +25,18 @@ It needs, on the account the Worker deploys into:
 | Account | Workers KV Storage: Edit                                    | `KV` and `OAUTH_KV`                                |
 | Account | D1: Edit                                                    | the database and its migrations                    |
 | Account | Workers R2 Storage: Edit                                    | the cache bucket                                   |
-| Account | Secrets Store: Read                                         | alchemy's state-store token                        |
+| Account | Secrets Store: Edit                                         | the store alchemy keeps its state-store token in   |
 | Account | Account Settings: Read                                      | the account and its workers.dev subdomain          |
 | Account | Access: Organizations, Identity Providers, and Groups: Read | the Zero Trust team domain the login page lives on |
 | Account | Access: Apps and Policies: Edit                             | the login gate itself                              |
 | Zone    | Workers Routes: Edit                                        | attaches `SELFHOST_DOMAIN` to the Worker           |
 | Zone    | DNS: Edit                                                   | the record that hostname needs                     |
+
+Secrets Store has to be Edit, not Read. On the very first deploy alchemy has no
+state store yet, so it creates one, and creating it means creating an
+account-wide Secrets Store to hold its auth token. The failure if the token only
+has Read is a bare `Unauthorized: Authentication error` naming no resource,
+logged right after `Deploying Cloudflare State Store 'alchemy-state-store'`.
 
 The two Access rows are separate permissions and both are needed. Without the
 first, the deploy stops at `Could not read the Zero Trust organization:
