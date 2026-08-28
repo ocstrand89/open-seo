@@ -19,16 +19,25 @@ once and confirm you want them enabled.
 Dashboard, **My Profile** then **API Tokens**, **Create Token**, custom token.
 It needs, on the account the Worker deploys into:
 
-| Scope   | Permission                      | Why                                         |
-| ------- | ------------------------------- | ------------------------------------------- |
-| Account | Workers Scripts: Edit           | the Worker, its Durable Objects, Workflows  |
-| Account | Workers KV Storage: Edit        | `KV` and `OAUTH_KV`                         |
-| Account | D1: Edit                        | the database and its migrations             |
-| Account | Workers R2 Storage: Edit        | the cache bucket                            |
-| Account | Secrets Store: Read             | alchemy's state-store token                 |
-| Account | Account Settings: Read          | reads the account and workers.dev subdomain |
-| Account | Access: Apps and Policies: Edit | the login gate                              |
-| Zone    | DNS: Edit                       | the `SELFHOST_DOMAIN` record                |
+| Scope   | Permission                                                  | Why                                                |
+| ------- | ----------------------------------------------------------- | -------------------------------------------------- |
+| Account | Workers Scripts: Edit                                       | the Worker, its Durable Objects, Workflows         |
+| Account | Workers KV Storage: Edit                                    | `KV` and `OAUTH_KV`                                |
+| Account | D1: Edit                                                    | the database and its migrations                    |
+| Account | Workers R2 Storage: Edit                                    | the cache bucket                                   |
+| Account | Secrets Store: Read                                         | alchemy's state-store token                        |
+| Account | Account Settings: Read                                      | the account and its workers.dev subdomain          |
+| Account | Access: Organizations, Identity Providers, and Groups: Read | the Zero Trust team domain the login page lives on |
+| Account | Access: Apps and Policies: Edit                             | the login gate itself                              |
+| Zone    | Workers Routes: Edit                                        | attaches `SELFHOST_DOMAIN` to the Worker           |
+| Zone    | DNS: Edit                                                   | the record that hostname needs                     |
+
+The two Access rows are separate permissions and both are needed. Without the
+first, the deploy stops at `Could not read the Zero Trust organization:
+Unauthorized`, and the error goes on to suggest re-running `pnpm alchemy login`,
+which is not the fix when the deploy runs on an API token. Read is enough there
+as long as the account already has a Zero Trust team; if it has none, the deploy
+creates one and the permission has to be Edit.
 
 A missing permission fails the deploy with an error naming what it could not
 do, so start here and widen only if it asks.
