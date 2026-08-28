@@ -172,6 +172,7 @@ const resolveSelfHostAccess = (
   stage: string,
   provision: boolean,
   workersSubdomain: string,
+  selfHostDomain: string,
 ) =>
   Effect.gen(function* () {
     let teamDomain = yield* optionalVar("TEAM_DOMAIN");
@@ -246,7 +247,11 @@ const resolveSelfHostAccess = (
         applicationId: "SelfHostAccess",
         policyName: `open-seo ${stage} self-host users`,
         applicationName: `open-seo ${stage}`,
-        domain: `${workerName(stage)}.${subdomain}`,
+        // SELFHOST_DOMAIN, when set, is the ONLY hostname the Worker
+        // answers on (the workers.dev URL is disabled below), so it is the
+        // hostname the gate has to cover. Protecting the workers.dev name
+        // instead would leave the real one wide open.
+        domain: selfHostDomain || `${workerName(stage)}.${subdomain}`,
         emails: allowedEmails,
       });
       policyAud = application.aud;
@@ -308,6 +313,10 @@ export default Alchemy.Stack(
     );
     const databaseProvider = yield* optionalVar("DATABASE_PROVIDER");
     const workersSubdomain = yield* readWorkersSubdomain({ required: false });
+    // Optional custom hostname for a self-host deploy, e.g. `seo.example.com`.
+    // Its Cloudflare zone must already be in the account; alchemy infers the
+    // zone from the hostname and creates the DNS record itself.
+    const selfHostDomain = yield* optionalVar("SELFHOST_DOMAIN");
 
     // Auth needs an absolute BETTER_AUTH_URL. Prod sets it explicitly;
     // previews always derive it from the deterministic worker name — a wrong
@@ -331,6 +340,8 @@ export default Alchemy.Stack(
           ),
         );
       }
+    } else if (selfHostDomain) {
+      authUrl = `https://${selfHostDomain}`;
     } else if (workersSubdomain) {
       authUrl = `https://${workerName(stage)}.${workersSubdomain}`;
     } else if (authMode === "hosted") {
@@ -349,12 +360,22 @@ export default Alchemy.Stack(
       stage,
       authMode === "cloudflare_access" && !prod,
       workersSubdomain,
+      selfHostDomain,
     );
 
     const app = yield* Cloudflare.Worker("open-seo", {
       name: workerName(stage),
       // Prod serves the real domains; the zone is inferred from the hostname.
-      domain: prod ? ["app.openseo.so", "www.app.openseo.so"] : undefined,
+      // A self-host deploy serves SELFHOST_DOMAIN when one is set.
+      domain: prod
+        ? ["app.openseo.so", "www.app.openseo.so"]
+        : selfHostDomain
+          ? [selfHostDomain]
+          : undefined,
+      // One front door. The Access application covers SELFHOST_DOMAIN only,
+      // so leaving the workers.dev URL enabled would publish an ungated route
+      // to the same Worker.
+      ...(selfHostDomain && !prod ? { url: false } : {}),
       // Prebuilt worker from `vite build` (@cloudflare/vite-plugin). The entry
       // exports the DO + WorkflowEntrypoint classes (re-exported by
       // src/server.ts), which `bundle: false` requires. Sibling chunks under

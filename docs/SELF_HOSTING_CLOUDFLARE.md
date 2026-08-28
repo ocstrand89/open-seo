@@ -60,6 +60,17 @@ This provisions the D1 database, KV namespaces, and R2 bucket, applies the datab
 
 To manage the Access application yourself instead, set `TEAM_DOMAIN` (`https://your-team.cloudflareaccess.com`) and `POLICY_AUD` (the application's audience tag) in `.env.selfhost` — the deploy then provisions no Access resources.
 
+## 4b) Serving it on your own domain (optional)
+
+Set `SELFHOST_DOMAIN` in `.env.selfhost` to the hostname you want, for example
+`seo.example.com`, and redeploy. Its zone must already be in the same
+Cloudflare account; the deploy attaches the hostname to the Worker, creates the
+DNS record, and points the Cloudflare Access application at it.
+
+Setting it also disables the Worker's `workers.dev` URL. The Access application
+covers one hostname, so leaving the `workers.dev` route enabled would publish
+an ungated way into the same Worker.
+
 ## 5) Validate setup
 
 1. Open the Worker URL printed at the end of the deploy.
