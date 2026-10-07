@@ -336,7 +336,7 @@ describe("native GSC reporting MCP extension", () => {
   });
 
   it.each([
-    { dimensions: ["page"] as const },
+    { dimensions: ["page" as const] },
     {
       filters: [
         {
@@ -357,7 +357,6 @@ describe("native GSC reporting MCP extension", () => {
             projectId: "project_1",
             aggregationType: "byProperty",
             ...extra,
-            ...(extra.dimensions ? { dimensions: [...extra.dimensions] } : {}),
           },
           toolContext,
         );
@@ -392,7 +391,7 @@ describe("native GSC reporting MCP extension", () => {
       truncated: false,
       sitemaps: [{ isPending: true }],
     });
-    expect(result.structuredContent.sitemaps?.[0]).not.toHaveProperty("errors");
+    expect(JSON.stringify(result.structuredContent)).not.toContain('"errors":');
     expect(result.content[0]).toMatchObject({
       type: "text",
       text: expect.stringContaining("errors: unavailable"),
