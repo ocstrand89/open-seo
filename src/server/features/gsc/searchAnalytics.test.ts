@@ -131,3 +131,26 @@ describe("buildSearchAnalyticsRequest", () => {
     ).toBe(1000);
   });
 });
+
+describe("aggregation requests", () => {
+  it("defaults to auto and forwards explicit byPage", () => {
+    expect(
+      buildSearchAnalyticsRequest({ projectId: "p" }, TODAY).aggregationType,
+    ).toBe("auto");
+    expect(
+      buildSearchAnalyticsRequest(
+        {
+          projectId: "p",
+          dimensions: ["page", "device"],
+          aggregationType: "byPage",
+          dataState: "final",
+        },
+        TODAY,
+      ),
+    ).toMatchObject({
+      aggregationType: "byPage",
+      dataState: "final",
+      dimensions: ["page", "device"],
+    });
+  });
+});

@@ -1,3 +1,11 @@
+import { z } from "zod";
+import {
+  gscSitemapSchema,
+  searchAnalyticsResponseSchema,
+  type GscSitemap,
+  type GscSearchAnalyticsResponse,
+} from "./gscReportingSchemas";
+export type { GscSearchAnalyticsResponse } from "./gscReportingSchemas";
 import { getAuth } from "@/lib/auth";
 import { GSC_OAUTH_PROVIDER_ID } from "@/shared/gsc";
 import { GscApiError, GscTokenError } from "./gscErrors";
@@ -137,6 +145,17 @@ export function createGscClient(opts: {
     return (await response.json()) as T;
   }
 
+  async function querySearchAnalyticsReport(
+    siteUrl: string,
+    body: GscSearchAnalyticsRequest,
+  ): Promise<GscSearchAnalyticsResponse> {
+    const data = await request<unknown>(
+      `${GSC_API_BASE}/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`,
+      { method: "POST", body },
+    );
+    return searchAnalyticsResponseSchema.parse(data);
+  }
+
   return {
     async getUserInfoEmail(): Promise<string | null> {
       const data = await request<{ email?: unknown }>(GOOGLE_USERINFO_URL);
@@ -156,11 +175,27 @@ export function createGscClient(opts: {
       siteUrl: string,
       body: GscSearchAnalyticsRequest,
     ): Promise<GscSearchAnalyticsRow[]> {
-      const data = await request<{ rows?: GscSearchAnalyticsRow[] }>(
-        `${GSC_API_BASE}/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`,
-        { method: "POST", body },
-      );
-      return data.rows ?? [];
+      return (await querySearchAnalyticsReport(siteUrl, body)).rows;
+    },
+
+    querySearchAnalyticsReport,
+
+    /** Read only: submitted sitemap processing state, not URL index coverage. */
+    async getSitemaps(
+      siteUrl: string,
+      sitemapUrl?: string,
+    ): Promise<GscSitemap[]> {
+      const base = `${GSC_API_BASE}/sites/${encodeURIComponent(siteUrl)}/sitemaps`;
+      if (sitemapUrl) {
+        const data = await request<unknown>(
+          `${base}/${encodeURIComponent(sitemapUrl)}`,
+        );
+        return [gscSitemapSchema.parse(data)];
+      }
+      const data = await request<unknown>(base);
+      return z
+        .object({ sitemap: z.array(gscSitemapSchema).default([]) })
+        .parse(data).sitemap;
     },
 
     /** URL Inspection API `urlInspection.index.inspect`. This lives on a

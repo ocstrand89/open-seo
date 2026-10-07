@@ -3,7 +3,7 @@ title: "Set up OpenSEO MCP"
 description: "Connect OpenSEO MCP to Claude, Codex, and other AI clients."
 ---
 
-OpenSEO MCP lets compatible AI clients call OpenSEO tools for keyword research, SERP inspection, local business research, competitive search intelligence, domain research, backlink overview, saved keywords, rank tracking, shared project context, and Google Search Console performance and URL inspection.
+OpenSEO MCP lets compatible AI clients call OpenSEO tools for keyword research, SERP inspection, local business research, competitive search intelligence, domain research, backlink overview, saved keywords, rank tracking, shared project context, and Google Search Console performance, native sitemap processing and URL inspection.
 
 The hosted MCP server URL is:
 
@@ -157,3 +157,17 @@ If Codex reports `Authorization server response missing required issuer: expecte
 If authorization fails, disconnect the OpenSEO server in your client, add it again, and repeat the login flow.
 
 If your agent cannot find a project, ask it to list OpenSEO projects first and use the returned project ID in later tool calls.
+
+## Read native Search Console sitemap processing
+
+`get_search_console_sitemaps` reads the project's connected property with its existing Google readonly grant. Supply `projectId` and optionally `sitemapUrl` for an exact sitemap. Omit `sitemapUrl` to list submitted sitemaps; at most 100 are returned, with `totalSitemaps`, `rowCount` and `truncated` indicating the boundary.
+
+The report includes Google's `lastSubmitted`, `lastDownloaded`, `isPending`, `errors`, `warnings` and `contents[].submitted`, when present. Missing fields remain unavailable. Submitted URL counts are **not** indexed or discovered-page coverage; Google's deprecated `contents[].indexed` is intentionally omitted. An empty successful list is different from a denied, expired or missing connection. This tool never submits or deletes sitemaps or requests indexing.
+
+## Reconcile Search Analytics aggregation
+
+`get_search_console_performance` accepts `aggregationType`: `auto` (the default), `byPage` or `byProperty`. `byProperty` cannot be used with page grouping/filtering, Discover or Google News. Google remains authoritative for other invalid combinations; the tool does not silently fall back.
+
+Successful responses include the resolved `request`, Google's `responseAggregationType` when returned, and `dataMetadata` for Google-provided incomplete-data boundaries. These are separate from OpenSEO's `meta`. Missing aggregation or incomplete-data metadata is not invented.
+
+Compare page and page/device queries using identical `startDate`, `endDate`, `type`, `dataState`, filters and pagination. Use `byPage` consistently where accepted and verify the returned aggregation before comparing grouped sums. Page-level impressions can differ from property-level impressions. Retain raw responses and do not infer reconciliation merely because the setting is now available.

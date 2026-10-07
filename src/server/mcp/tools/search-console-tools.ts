@@ -11,6 +11,7 @@ import { hasSelfHostedGoogleOAuthConfig } from "@/server/features/google/oauth-c
 import { isHostedServerAuthMode } from "@/server/lib/runtime-env";
 import { GscService } from "@/server/features/gsc/services/GscService";
 import {
+  GSC_AGGREGATION_TYPES,
   GSC_DATE_RANGES,
   GSC_DEFAULT_ROW_LIMIT,
   GSC_DIMENSIONS,
@@ -25,6 +26,8 @@ import {
   GscTokenError,
 } from "@/server/lib/gscErrors";
 import { GSC_SELF_HOSTED_SETUP_DOCS_URL } from "@/shared/gsc";
+
+import { gscSitemapSchema } from "@/server/lib/gscReportingSchemas";
 
 const TEXT_SUMMARY_ROWS = 15;
 
@@ -170,6 +173,12 @@ const perfInputSchema = {
     .enum(GSC_SEARCH_TYPES)
     .optional()
     .describe("Search type (default web)."),
+  aggregationType: z
+    .enum(GSC_AGGREGATION_TYPES)
+    .optional()
+    .describe(
+      "Aggregation: auto (default), byPage or byProperty. byProperty cannot group/filter by page or use discover/googleNews. The response includes Google’s actual aggregation and the resolved request.",
+    ),
   dataState: z
     .enum(["all", "final"])
     .optional()
@@ -194,6 +203,14 @@ export const getSearchConsolePerformanceTool = {
       startDate: z.string().optional(),
       endDate: z.string().optional(),
       dimensions: z.array(z.string()).optional(),
+      request: z.record(z.string(), z.unknown()).optional(),
+      responseAggregationType: z.string().optional(),
+      dataMetadata: z
+        .object({
+          first_incomplete_date: z.string().optional(),
+          first_incomplete_hour: z.string().optional(),
+        })
+        .optional(),
       rowCount: z.number().optional(),
       rows: z
         .array(
@@ -251,6 +268,19 @@ export const getSearchConsolePerformanceTool = {
       );
     }
 
+    if (
+      args.aggregationType === "byProperty" &&
+      (args.dimensions?.includes("page") ||
+        args.filters?.some((f) => f.dimension === "page") ||
+        args.type === "discover" ||
+        args.type === "googleNews")
+    ) {
+      return invalidRequest(
+        meta,
+        "byProperty cannot group/filter by page or use discover/googleNews. Use auto or byPage.",
+      );
+    }
+
     try {
       const result = await GscService.getPerformance(
         args satisfies GscPerformanceInput,
@@ -265,7 +295,7 @@ export const getSearchConsolePerformanceTool = {
 
       const header =
         `${result.siteUrl} · ${dimensions.join("+")} · ${result.request.startDate}→${result.request.endDate} · ` +
-        `${rows.length} row${rows.length === 1 ? "" : "s"}${hasMore ? " (more available — paginate with startRow)" : ""}`;
+        `${rows.length} row${rows.length === 1 ? "" : "s"}${hasMore ? " (more available — paginate with startRow)" : ""} · aggregation ${result.responseAggregationType ?? "unavailable"}`;
       const text =
         rows.length > 0
           ? `${header}\n${formatMcpTable(rows, GSC_PERF_COLUMNS)}`
@@ -280,6 +310,9 @@ export const getSearchConsolePerformanceTool = {
           startDate: result.request.startDate,
           endDate: result.request.endDate,
           dimensions,
+          request: result.request,
+          responseAggregationType: result.responseAggregationType,
+          dataMetadata: result.metadata,
           rowCount: rows.length,
           rows,
           hasMore,
@@ -398,6 +431,92 @@ export const inspectUrlsTool = {
       const isNotConnected = error instanceof GscNotConnectedError;
       return mcpResponse({
         text: `${describeGscError(error)}${isNotConnected ? ` Connect it here: ${connectUrl}` : ` (reconnect at ${connectUrl})`}`,
+        meta,
+        structuredContent: {
+          ok: false,
+          reason: isNotConnected ? "not_connected" : "api_error",
+          connectUrl,
+        },
+      });
+    }
+  }),
+};
+
+// Native Sitemaps API; no submission/removal endpoints or extra OAuth scope.
+const sitemapsInputSchema = {
+  projectId: projectIdSchema,
+  sitemapUrl: z
+    .string()
+    .url()
+    .refine(
+      (url) => ["https:", "http:"].includes(new URL(url).protocol),
+      "Use an HTTP(S) sitemap URL",
+    )
+    .optional()
+    .describe(
+      "Exact sitemap URL to read. Omit to list submitted sitemaps (first 100 returned; truncation is explicit).",
+    ),
+};
+type SitemapsArgs = z.infer<z.ZodObject<typeof sitemapsInputSchema>>;
+
+export const getSearchConsoleSitemapsTool = {
+  name: "get_search_console_sitemaps",
+  config: {
+    title: "Get Google Search Console sitemaps",
+    description:
+      "Read native Google sitemap processing: lastSubmitted, lastDownloaded, isPending, errors, warnings and contents.submitted URL counts. Missing fields remain unavailable. Deprecated indexed counts are omitted; this is not URL indexing coverage. Uses the connected property and existing readonly grant. No submissions or removals. Free, read-only.",
+    inputSchema: sitemapsInputSchema,
+    outputSchema: {
+      ok: z.boolean(),
+      reason: z.string().optional(),
+      connectUrl: z.string().optional(),
+      setupDocsUrl: z.string().optional(),
+      siteUrl: z.string().optional(),
+      sitemaps: z.array(gscSitemapSchema).optional(),
+      rowCount: z.number().optional(),
+      totalSitemaps: z.number().optional(),
+      truncated: z.boolean().optional(),
+      ...optionalMetaOutputSchema,
+    },
+    annotations: {
+      readOnlyHint: true,
+      openWorldHint: false,
+      destructiveHint: false,
+    },
+  },
+  handler: withMcpProjectAuth(async (args: SitemapsArgs, context) => {
+    const blocked = await missingSelfHostedGoogleClientResponse(
+      context,
+      args.projectId,
+    );
+    if (blocked) return blocked;
+    const connectUrl = connectGscUrl(context.baseUrl, args.projectId);
+    const meta = buildProjectMeta(context, args.projectId);
+    try {
+      const result = await GscService.getSitemaps(args);
+      const sitemaps = result.sitemaps.slice(0, 100);
+      const summary = sitemaps
+        .slice(0, TEXT_SUMMARY_ROWS)
+        .map(
+          (s) =>
+            `${s.path} — pending: ${s.isPending ?? "unavailable"}; last downloaded: ${s.lastDownloaded ?? "unavailable"}; errors: ${s.errors ?? "unavailable"}; warnings: ${s.warnings ?? "unavailable"}`,
+        );
+      return mcpResponse({
+        text: `${result.siteUrl} · ${sitemaps.length}/${result.sitemaps.length} sitemaps\n${summary.join("\n") || "No submitted sitemaps returned."}\nSubmitted URL counts are not indexed counts; deprecated indexed counts are omitted.`,
+        meta,
+        structuredContent: {
+          ok: true,
+          siteUrl: result.siteUrl,
+          sitemaps,
+          rowCount: sitemaps.length,
+          totalSitemaps: result.sitemaps.length,
+          truncated: sitemaps.length < result.sitemaps.length,
+        },
+      });
+    } catch (error) {
+      const isNotConnected = error instanceof GscNotConnectedError;
+      return mcpResponse({
+        text: `${describeGscError(error)} (connection: ${connectUrl})`,
         meta,
         structuredContent: {
           ok: false,

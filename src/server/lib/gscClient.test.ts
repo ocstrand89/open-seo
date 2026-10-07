@@ -167,4 +167,139 @@ describe("gscClient", () => {
       createGscClient({ userId: "u1" }).listSites(),
     ).rejects.toBeInstanceOf(GscTokenError);
   });
+  it("preserves native aggregation and incomplete-data metadata", async () => {
+    mocks.fetch.mockResolvedValue(
+      jsonResponse({
+        rows: [],
+        responseAggregationType: "byPage",
+        metadata: { first_incomplete_date: "2026-10-04" },
+      }),
+    );
+    const { createGscClient } = await import("./gscClient");
+    const result = await createGscClient({
+      userId: "u1",
+    }).querySearchAnalyticsReport("sc-domain:example.com", {
+      startDate: "2026-09-06",
+      endDate: "2026-10-03",
+      aggregationType: "byPage",
+      dataState: "final",
+    });
+    expect(result).toEqual({
+      rows: [],
+      responseAggregationType: "byPage",
+      metadata: { first_incomplete_date: "2026-10-04" },
+    });
+    expect(
+      JSON.parse(String(mocks.fetch.mock.calls[0][1]?.body)),
+    ).toMatchObject({ aggregationType: "byPage", dataState: "final" });
+  });
+
+  it("keeps the legacy row-only client contract", async () => {
+    const rows = [
+      { keys: ["MOBILE"], clicks: 1, impressions: 2, ctr: 0.5, position: 1 },
+    ];
+    mocks.fetch.mockResolvedValue(
+      jsonResponse({ rows, responseAggregationType: "byPage" }),
+    );
+    const { createGscClient } = await import("./gscClient");
+    expect(
+      await createGscClient({ userId: "u1" }).querySearchAnalytics(
+        "https://example.com/",
+        { startDate: "2026-09-06", endDate: "2026-10-03" },
+      ),
+    ).toEqual(rows);
+  });
+
+  it("does not invent absent response metadata", async () => {
+    mocks.fetch.mockResolvedValue(jsonResponse({}));
+    const { createGscClient } = await import("./gscClient");
+    expect(
+      await createGscClient({ userId: "u1" }).querySearchAnalyticsReport(
+        "sc-domain:example.com",
+        { startDate: "2026-09-06", endDate: "2026-10-03" },
+      ),
+    ).toEqual({ rows: [] });
+  });
+
+  it("reads native sitemap counts without deprecated indexed values", async () => {
+    mocks.fetch.mockResolvedValue(
+      jsonResponse({
+        sitemap: [
+          {
+            path: "https://example.com/sitemap.xml",
+            errors: "0",
+            isPending: false,
+            contents: [
+              { type: "web", submitted: "9007199254740993", indexed: "0" },
+            ],
+          },
+        ],
+      }),
+    );
+    const { createGscClient } = await import("./gscClient");
+    const result = await createGscClient({
+      userId: "u1",
+      gscAccountId: "sub-a",
+    }).getSitemaps("sc-domain:example.com");
+    expect(result).toEqual([
+      {
+        path: "https://example.com/sitemap.xml",
+        errors: "0",
+        isPending: false,
+        contents: [{ type: "web", submitted: "9007199254740993" }],
+      },
+    ]);
+    expect(mocks.fetch.mock.calls[0][0]).toBe(
+      "https://www.googleapis.com/webmasters/v3/sites/sc-domain%3Aexample.com/sitemaps",
+    );
+    expect(mocks.fetch.mock.calls[0][1]).toMatchObject({
+      method: "GET",
+      body: undefined,
+    });
+  });
+
+  it("encodes exact sitemap and prefix property as path components", async () => {
+    const url = "https://example.com/sitemap.xml?edition=a&b=2";
+    mocks.fetch.mockResolvedValue(jsonResponse({ path: url }));
+    const { createGscClient } = await import("./gscClient");
+    expect(
+      await createGscClient({ userId: "u1" }).getSitemaps(
+        "https://example.com/",
+        url,
+      ),
+    ).toEqual([{ path: url }]);
+    expect(mocks.fetch.mock.calls[0][0]).toBe(
+      `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent("https://example.com/")}/sitemaps/${encodeURIComponent(url)}`,
+    );
+  });
+
+  it("returns empty sitemap lists but preserves API failures", async () => {
+    const { createGscClient } = await import("./gscClient");
+    const client = createGscClient({ userId: "u1" });
+    mocks.fetch.mockResolvedValue(jsonResponse({}));
+    expect(await client.getSitemaps("sc-domain:example.com")).toEqual([]);
+    mocks.fetch.mockResolvedValue(jsonResponse({}, 403));
+    await expect(
+      client.getSitemaps("sc-domain:example.com"),
+    ).rejects.toMatchObject({ status: 403 });
+    mocks.fetch.mockResolvedValue(jsonResponse({}, 404));
+    await expect(
+      client.getSitemaps(
+        "sc-domain:example.com",
+        "https://example.com/missing.xml",
+      ),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("rejects malformed native sitemap responses", async () => {
+    mocks.fetch.mockResolvedValue(
+      jsonResponse({
+        sitemap: [{ path: "https://example.com/sitemap.xml", errors: -1 }],
+      }),
+    );
+    const { createGscClient } = await import("./gscClient");
+    await expect(
+      createGscClient({ userId: "u1" }).getSitemaps("sc-domain:example.com"),
+    ).rejects.toThrow();
+  });
 });

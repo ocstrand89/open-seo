@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => {
   const listSites = vi.fn<(opts: GscClientOptions) => Promise<GscSite[]>>();
   const getUserInfoEmail =
     vi.fn<(opts: GscClientOptions) => Promise<string | null>>();
+  const getSitemaps = vi.fn();
   const querySearchAnalytics =
     vi.fn<(opts: GscClientOptions) => Promise<never[]>>();
   const deleteWhere = vi
@@ -37,10 +38,17 @@ const mocks = vi.hoisted(() => {
     listSites,
     getUserInfoEmail,
     querySearchAnalytics,
+    getSitemaps,
     createGscClient: vi.fn((opts: GscClientOptions) => ({
       listSites: () => listSites(opts),
       getUserInfoEmail: () => getUserInfoEmail(opts),
       querySearchAnalytics: () => querySearchAnalytics(opts),
+      querySearchAnalyticsReport: async () => ({
+        rows: await querySearchAnalytics(opts),
+        responseAggregationType: "byPage",
+      }),
+      getSitemaps: (siteUrl: string, sitemapUrl?: string) =>
+        getSitemaps(opts, siteUrl, sitemapUrl),
     })),
     upsert: vi.fn(),
     getByProjectId: vi.fn(),
@@ -428,5 +436,37 @@ describe("GscService.disconnect", () => {
 
     expect(mocks.existsForConnectorAccount).not.toHaveBeenCalled();
     expect(mocks.dbDelete).not.toHaveBeenCalled();
+  });
+});
+
+describe("GscService native reporting", () => {
+  it("uses the bound grant/property for exact sitemap reads", async () => {
+    mocks.getByProjectId.mockResolvedValue({
+      connectedByUserId: "owner",
+      gscAccountId: "grant-a",
+      siteUrl: "sc-domain:example.com",
+    });
+    mocks.getSitemaps.mockResolvedValue([
+      { path: "https://example.com/sitemap.xml" },
+    ]);
+    expect(
+      await GscService.getSitemaps({
+        projectId: "p1",
+        sitemapUrl: "https://example.com/sitemap.xml",
+      }),
+    ).toEqual({
+      siteUrl: "sc-domain:example.com",
+      sitemaps: [{ path: "https://example.com/sitemap.xml" }],
+    });
+    expect(mocks.getSitemaps).toHaveBeenCalledWith(
+      { userId: "owner", gscAccountId: "grant-a" },
+      "sc-domain:example.com",
+      "https://example.com/sitemap.xml",
+    );
+  });
+  it("rejects a missing connection before minting a token", async () => {
+    mocks.getByProjectId.mockResolvedValue(null);
+    await expect(GscService.getSitemaps({ projectId: "p1" })).rejects.toThrow();
+    expect(mocks.createGscClient).not.toHaveBeenCalled();
   });
 });
