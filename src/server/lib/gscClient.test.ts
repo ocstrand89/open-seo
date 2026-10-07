@@ -189,9 +189,13 @@ describe("gscClient", () => {
       responseAggregationType: "byPage",
       metadata: { first_incomplete_date: "2026-10-04" },
     });
-    expect(
-      JSON.parse(String(mocks.fetch.mock.calls[0][1]?.body)),
-    ).toMatchObject({ aggregationType: "byPage", dataState: "final" });
+    const body = mocks.fetch.mock.calls[0][1]?.body;
+    if (typeof body !== "string")
+      throw new Error("Expected a JSON request body");
+    expect(JSON.parse(body)).toMatchObject({
+      aggregationType: "byPage",
+      dataState: "final",
+    });
   });
 
   it("keeps the legacy row-only client contract", async () => {

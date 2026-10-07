@@ -13,7 +13,14 @@ const mocks = vi.hoisted(() => {
   const listSites = vi.fn<(opts: GscClientOptions) => Promise<GscSite[]>>();
   const getUserInfoEmail =
     vi.fn<(opts: GscClientOptions) => Promise<string | null>>();
-  const getSitemaps = vi.fn();
+  const getSitemaps =
+    vi.fn<
+      (
+        opts: GscClientOptions,
+        siteUrl: string,
+        sitemapUrl?: string,
+      ) => Promise<Array<{ path: string }>>
+    >();
   const querySearchAnalytics =
     vi.fn<(opts: GscClientOptions) => Promise<never[]>>();
   const deleteWhere = vi
