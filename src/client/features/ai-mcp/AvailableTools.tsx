@@ -181,6 +181,12 @@ const toolCategories: ToolCategory[] = [
           "Read clicks, impressions, CTR, and position from Search Console.",
       },
       {
+        name: "get_search_console_sitemaps",
+        title: "Get Search Console sitemaps",
+        description:
+          "Read native sitemap processing, last download and submitted URL counts.",
+      },
+      {
         name: "inspect_urls",
         title: "Inspect URLs",
         description:

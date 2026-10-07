@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   GscService: {
     getPerformance: vi.fn(),
     inspectUrls: vi.fn(),
+    getSitemaps: vi.fn(),
   },
 }));
 

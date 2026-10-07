@@ -6,6 +6,7 @@ import { AppError } from "@/server/lib/errors";
 import {
   createGscClient,
   type GscSite,
+  type GscSearchAnalyticsResponse,
   type UrlInspectionResult,
 } from "@/server/lib/gscClient";
 import {
@@ -34,6 +35,8 @@ type GscPerformanceResult = {
   connectedBy: string | null;
   request: GscSearchAnalyticsRequest;
   rows: GscSearchAnalyticsRow[];
+  responseAggregationType?: string;
+  metadata?: GscSearchAnalyticsResponse["metadata"];
 };
 
 type GscSiteListResult = {
@@ -237,13 +240,35 @@ async function getPerformance(
     userId: connection.connectedByUserId,
     gscAccountId: connection.gscAccountId ?? undefined,
   });
-  const rows = await client.querySearchAnalytics(connection.siteUrl, request);
+  const result = await client.querySearchAnalyticsReport(
+    connection.siteUrl,
+    request,
+  );
   return {
     siteUrl: connection.siteUrl,
     connectedBy: connection.connectedAccountEmail,
     request,
-    rows,
+    rows: result.rows,
+    responseAggregationType: result.responseAggregationType,
+    metadata: result.metadata,
   };
+}
+
+/** Uses only the connected project's selected grant and property. */
+async function getSitemaps(input: { projectId: string; sitemapUrl?: string }) {
+  const connection = await GscConnectionRepository.getByProjectId(
+    input.projectId,
+  );
+  if (!connection) throw new GscNotConnectedError(input.projectId);
+  const client = createGscClient({
+    userId: connection.connectedByUserId,
+    gscAccountId: connection.gscAccountId ?? undefined,
+  });
+  const sitemaps = await client.getSitemaps(
+    connection.siteUrl,
+    input.sitemapUrl,
+  );
+  return { siteUrl: connection.siteUrl, sitemaps };
 }
 
 type GscUrlInspection = {
@@ -309,5 +334,6 @@ export const GscService = {
   setSite,
   disconnect,
   getPerformance,
+  getSitemaps,
   inspectUrls,
 };

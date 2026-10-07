@@ -32,6 +32,8 @@ export const GSC_DATE_RANGES = [
   "last_16_months",
 ] as const;
 
+export const GSC_AGGREGATION_TYPES = ["auto", "byPage", "byProperty"] as const;
+
 export const GSC_DEFAULT_ROW_LIMIT = 1000;
 // v1 caps rows-per-call at 1000 to protect the MCP context window. The GSC API
 // supports up to 25000, but we keep fetched == returned so counts stay honest;
@@ -62,6 +64,7 @@ export type GscPerformanceInput = {
   startRow?: number;
   type?: GscSearchType;
   dataState?: "all" | "final";
+  aggregationType?: (typeof GSC_AGGREGATION_TYPES)[number];
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -156,6 +159,7 @@ export function buildSearchAnalyticsRequest(
     ),
     type: input.type ?? "web",
     dataState: input.dataState ?? "all",
+    aggregationType: input.aggregationType ?? "auto",
   };
   if (input.startRow && input.startRow > 0) {
     request.startRow = input.startRow;
