@@ -57,6 +57,9 @@ do, so start here and widen only if it asks.
 | `CLOUDFLARE_API_TOKEN`  | the token from step 2                                  |
 | `CLOUDFLARE_ACCOUNT_ID` | the account id, shown in the dashboard URL and sidebar |
 | `ENV_SELFHOST`          | the entire contents of `.env.selfhost`, pasted as-is   |
+| `GOOGLE_CLIENT_ID`      | Search Console and Analytics, from Google Cloud        |
+| `GOOGLE_CLIENT_SECRET`  | the secret of that same OAuth client                   |
+| `BETTER_AUTH_SECRET`    | a random string of at least 32 characters              |
 
 `ENV_SELFHOST` is the same file the local flow uses, secrets and all:
 
@@ -65,6 +68,12 @@ DATAFORSEO_API_KEY=<the Base64 credential from DataForSEO>
 ACCESS_ALLOWED_EMAILS=you@example.com
 SELFHOST_DOMAIN=seo.example.com
 ```
+
+The three Google secrets are separate so that replacing `ENV_SELFHOST`, which
+GitHub never shows back, cannot drop them. Each one overrides the same key in
+`ENV_SELFHOST`, and the deploy fails when any of the three is empty after that,
+since otherwise both Google integrations would disconnect without a warning.
+See [Self-hosted Google Search Console](./SELF_HOSTING_GOOGLE_SEARCH_CONSOLE.md).
 
 The runner writes it to disk for the deploy and is destroyed afterwards. The
 values it contains end up on the Worker as encrypted Cloudflare secrets.
