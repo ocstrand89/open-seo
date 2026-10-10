@@ -194,41 +194,47 @@ export const getSearchConsolePerformanceTool = {
     description:
       "Query the connected Search Console property's Search Analytics: clicks, impressions, CTR, and average position by query/page/country/device/date. First-party data — use it for what already ranks, near-ranking queries, and pages with real demand. ctr is a 0-1 fraction; position is a 1-based average; dates are Pacific Time; the last ~3 days may be incomplete. Read-only; uses no credits.",
     inputSchema: perfInputSchema,
-    outputSchema: {
-      ok: z.boolean(),
-      reason: z.string().optional(),
-      connectUrl: z.string().optional(),
-      setupDocsUrl: z.string().optional(),
-      siteUrl: z.string().optional(),
-      startDate: z.string().optional(),
-      endDate: z.string().optional(),
-      dimensions: z.array(z.string()).optional(),
-      request: z.record(z.string(), z.unknown()).optional(),
-      responseAggregationType: z.string().optional(),
-      dataMetadata: z
-        .object({
-          first_incomplete_date: z.string().optional(),
-          first_incomplete_hour: z.string().optional(),
-        })
-        .optional(),
-      rowCount: z.number().optional(),
-      rows: z
-        .array(
-          z
-            .object({
-              keys: z.array(z.string()).optional(),
-              clicks: z.number(),
-              impressions: z.number(),
-              ctr: z.number(),
-              position: z.number(),
-            })
-            .passthrough(),
-        )
-        .optional(),
-      hasMore: z.boolean().optional(),
-      nextStartRow: z.number().optional(),
-      ...optionalMetaOutputSchema,
-    },
+    // Passthrough at every object level: the generated JSON Schema is what MCP
+    // clients validate against, and a plain z.object emits additionalProperties:false,
+    // so any key Google or this tool adds later would fail the whole call.
+    outputSchema: z
+      .object({
+        ok: z.boolean(),
+        reason: z.string().optional(),
+        connectUrl: z.string().optional(),
+        setupDocsUrl: z.string().optional(),
+        siteUrl: z.string().optional(),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+        dimensions: z.array(z.string()).optional(),
+        request: z.record(z.string(), z.unknown()).optional(),
+        responseAggregationType: z.string().optional(),
+        dataMetadata: z
+          .object({
+            first_incomplete_date: z.string().optional(),
+            first_incomplete_hour: z.string().optional(),
+          })
+          .passthrough()
+          .optional(),
+        rowCount: z.number().optional(),
+        rows: z
+          .array(
+            z
+              .object({
+                keys: z.array(z.string()).optional(),
+                clicks: z.number(),
+                impressions: z.number(),
+                ctr: z.number(),
+                position: z.number(),
+              })
+              .passthrough(),
+          )
+          .optional(),
+        hasMore: z.boolean().optional(),
+        nextStartRow: z.number().optional(),
+        ...optionalMetaOutputSchema,
+      })
+      .passthrough(),
     annotations: {
       readOnlyHint: true,
       openWorldHint: false,

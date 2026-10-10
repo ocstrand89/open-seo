@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import { GscApiError, GscNotConnectedError } from "@/server/lib/gscErrors";
 import * as searchConsoleTools from "./search-console-tools";
 import { makeToolContext } from "./tool-test-support";
@@ -102,6 +103,21 @@ describe("search console MCP tools", () => {
     );
     expect(text?.type === "text" && text.text).toContain("seo tools");
     expect(text?.type === "text" && text.text).toContain("4.0%");
+  });
+
+  it("publishes a performance output schema that tolerates extra keys", () => {
+    // MCP clients validate structuredContent against this JSON Schema, so
+    // additionalProperties:false anywhere fails the whole call on a new key.
+    const { getSearchConsolePerformanceTool } = searchConsoleTools;
+    const json = z.toJSONSchema(
+      getSearchConsolePerformanceTool.config.outputSchema,
+      { io: "output" },
+    );
+
+    expect(json).not.toMatchObject({ additionalProperties: false });
+    expect(json).toMatchObject({
+      properties: { dataMetadata: { additionalProperties: {} } },
+    });
   });
 
   it("surfaces a not-connected message with a connect URL", async () => {
