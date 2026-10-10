@@ -90,11 +90,17 @@ jobs:
       # The Access gate is the only thing between the internet and your SEO
       # data, so prove it is in front of the deployed hostname. A plain 2xx
       # means the app answered without asking anyone to log in.
+      # Access redirects a browser (Accept: text/html) to its login page, and
+      # answers other clients 401 with a www-authenticate header naming its
+      # protected-resource metadata. Either one means the gate is there.
       - name: Verify the Access gate
         if: env.SELFHOST_DOMAIN != ''
         run: |
+          headers=$(mktemp)
           for attempt in 1 2 3 4 5 6 7 8; do
-            response=$(curl -sS -o /dev/null -m 10 -w '%{http_code} %{redirect_url}' \
+            : > "$headers"
+            response=$(curl -sS -o /dev/null -D "$headers" -m 10 \
+              -H 'Accept: text/html' -w '%{http_code} %{redirect_url}' \
               "https://${SELFHOST_DOMAIN}") || response=""
             code="${response%% *}"
             location="${response#* }"
@@ -104,6 +110,10 @@ jobs:
                 exit 0
                 ;;
             esac
+            if [ "$code" = "401" ] && grep -qi '^www-authenticate:.*cloudflare-access-protected-resource' "$headers"; then
+              echo "Access gate is in front of https://${SELFHOST_DOMAIN}"
+              exit 0
+            fi
             case "$code" in
               2*|3*)
                 echo "::error::https://${SELFHOST_DOMAIN} answered ${code} without an Access login redirect"
