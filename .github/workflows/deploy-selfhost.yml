@@ -15,6 +15,11 @@ name: Deploy self-host
 #   ENV_SELFHOST          The whole contents of .env.selfhost, including
 #                         DATAFORSEO_API_KEY. Written to disk on the runner and
 #                         thrown away with it.
+#   GOOGLE_CLIENT_ID      Search Console and Analytics. Each one overrides the
+#   GOOGLE_CLIENT_SECRET  same key in ENV_SELFHOST, and the deploy fails when
+#   BETTER_AUTH_SECRET    any of the three is still empty after that, because
+#                         alchemy would otherwise deploy the Worker without
+#                         them and silently disconnect both integrations.
 #
 # The upstream repository never runs this file: the gate below pins it to this
 # fork, so a synced copy stays inert anywhere else.
@@ -71,6 +76,28 @@ jobs:
         run: printf '%s' "$ENV_SELFHOST" > .env.selfhost
         env:
           ENV_SELFHOST: ${{ secrets.ENV_SELFHOST }}
+
+      # The Google credentials live in their own repository secrets so editing
+      # ENV_SELFHOST (which GitHub never shows back) cannot drop them. A value
+      # here wins over the same key in ENV_SELFHOST.
+      - name: Add the Google credentials
+        run: |
+          [ -z "$(tail -c1 .env.selfhost)" ] || echo >> .env.selfhost
+          for key in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET BETTER_AUTH_SECRET; do
+            value="${!key}"
+            if [ -n "$value" ]; then
+              sed -i "/^${key}=/d" .env.selfhost
+              printf '%s=%s\n' "$key" "$value" >> .env.selfhost
+            fi
+            grep -qE "^${key}=." .env.selfhost ||
+              { echo "::error::${key} is empty. Set it as a repository secret."; exit 1; }
+          done
+          grep -qE '^BETTER_AUTH_SECRET=.{32,}' .env.selfhost ||
+            { echo "::error::BETTER_AUTH_SECRET must be at least 32 characters."; exit 1; }
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
 
       # Fail on an empty or malformed secret before spending a build on it.
       - name: Check the deploy inputs
