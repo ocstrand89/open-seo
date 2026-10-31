@@ -46,6 +46,10 @@ overrides:
   fast-uri: "^3.1.5"
   # 9 advisories incl. GHSA-88fw-hqm2-52qc (CORS) — waiting on @modelcontextprotocol/sdk
   hono: "^4.12.25"
+  # agents 0.20.1 peer-pins the MCP SDK v2 packages at exactly 2.0.0; keep its
+  # pin on the version the app uses. Remove once agents widens its peer range.
+  "@modelcontextprotocol/client": "2.3.1"
+  "@modelcontextprotocol/server": "2.3.1"
   # GHSA-mwp4-54f8-5fhr — waiting on @modelcontextprotocol/sdk
   ip-address: "^10.3.1"
   # GHSA-5p4m-2wfm-xmqj — waiting on @tanstack/start-plugin-core
